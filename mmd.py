@@ -36,7 +36,7 @@ def gaussian_kernel(x, y, gammas):
     return sum(kernels) / len(kernels)
 
 
-def compute_mmd(source, target, gammas=None, pool_fn=temporal_mean_std_pool, normalize=True):
+def compute_mmd(source, target, gammas=None, pool_fn=temporal_mean_std_pool, normalize=False):
     """
     Compute MK-MMD loss between source and target
     - source, target: [B, T, D]

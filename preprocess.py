@@ -112,21 +112,21 @@ def normalize(df, flag='train', scalers=None):
     if flag == 'train':
         scalers = {
             'time': MinMaxScaler(),
-            'voltage': MinMaxScaler(),
             'current': MinMaxScaler(),
+            'voltage': MinMaxScaler(),
             'temp': MinMaxScaler()
         }
         df.iloc[:, 0] = scalers['time'].fit_transform(df.iloc[:, 0].values.reshape(-1, 1)).flatten()
-        df.iloc[:, 1] = scalers['voltage'].fit_transform(df.iloc[:, 1].values.reshape(-1, 1)).flatten()
-        df.iloc[:, 2] = scalers['current'].fit_transform(df.iloc[:, 2].values.reshape(-1, 1)).flatten()
+        df.iloc[:, 1] = scalers['current'].fit_transform(df.iloc[:, 1].values.reshape(-1, 1)).flatten()
+        df.iloc[:, 2] = scalers['voltage'].fit_transform(df.iloc[:, 2].values.reshape(-1, 1)).flatten()
         df.iloc[:, 3] = scalers['temp'].fit_transform(df.iloc[:, 3].values.reshape(-1, 1)).flatten()
         return df, scalers
 
     elif flag == 'test':
         assert scalers is not None, "传入训练阶段得到的scalers"
         df.iloc[:, 0] = scalers['time'].transform(df.iloc[:, 0].values.reshape(-1, 1)).flatten()
-        df.iloc[:, 1] = scalers['voltage'].transform(df.iloc[:, 1].values.reshape(-1, 1)).flatten()
-        df.iloc[:, 2] = scalers['current'].transform(df.iloc[:, 2].values.reshape(-1, 1)).flatten()
+        df.iloc[:, 1] = scalers['current'].transform(df.iloc[:, 1].values.reshape(-1, 1)).flatten()
+        df.iloc[:, 2] = scalers['voltage'].transform(df.iloc[:, 2].values.reshape(-1, 1)).flatten()
         df.iloc[:, 3] = scalers['temp'].transform(df.iloc[:, 3].values.reshape(-1, 1)).flatten()
         return df
 
@@ -158,7 +158,7 @@ def get_dataloader(dataset, flag, scalers=None, validation_split=0, seed=42):
     df = apply_filter(df)
 
     # 重新排列列顺序
-    df = df[[df.columns[0], df.columns[2], df.columns[1], 'current_smooth', 'voltage_smooth', df.columns[3],
+    df = df[[df.columns[0], df.columns[1], df.columns[2], 'current_smooth', 'voltage_smooth', df.columns[3],
              df.columns[4]]].values
 
     # plot_voltage_current_raw_vs_filtered_after_normalize(df)

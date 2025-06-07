@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Function
 
 
 class Time2Vec(nn.Module):
@@ -140,54 +141,6 @@ class Encoder(nn.Module):
         return final_encoded, decomposed
 
 
-class Decoder(nn.Module):
-    def __init__(self, input_dim=5, d_model=64, nhead=4, num_layers=2, dropout=0.1):
-        """
-        可还原输入特征的解码器
-
-        Args:
-            input_dim: 原始输入特征维度（电流、电压、滤波后电流、滤波后电压、温度）
-            d_model: 编码器输出维度（应与Encoder中保持一致）
-            nhead: 多头注意力头数
-            num_layers: Transformer解码层数
-            dropout: Dropout比例
-        """
-        super().__init__()
-
-        decoder_layer = nn.TransformerDecoderLayer(
-            d_model=d_model,
-            nhead=nhead,
-            dropout=dropout,
-            batch_first=True
-        )
-        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
-
-        self.output_proj = nn.Sequential(
-            nn.Linear(d_model, d_model // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_model // 2, d_model // 4),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_model // 4, input_dim)  # 输出为原始特征维度
-        )
-
-    def forward(self, tgt_feats, memory):
-        """
-        解码并还原特征
-
-        Args:
-            tgt_feats: (B, T, d_model) - 解码器的目标输入（通常来自目标域Encoder的输出）
-            memory: (B, T, d_model) - 编码器的记忆输出（通常来自源域Encoder）
-
-        Returns:
-            recovered_x: (B, T, input_dim) - 还原的原始特征序列
-        """
-        decoded = self.decoder(tgt=tgt_feats, memory=memory)
-        recovered_x = self.output_proj(decoded)
-        return recovered_x
-
-
 class SOCPredictor(nn.Module):
     """
     完整的SOC预测模型，包含编码器和预测头
@@ -280,3 +233,35 @@ class SOCPredictor(nn.Module):
         soc_pred = self.soc_predictor(aggregated)
 
         return soc_pred, decomposed
+
+
+class GradientReverseFunction(Function):
+    @staticmethod
+    def forward(ctx, x, lambda_):
+        ctx.lambda_ = lambda_
+        return x
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        if grad_output is None:
+            return None, None
+        return -ctx.lambda_ * grad_output, None
+
+
+def grad_reverse(x, lambda_=1.0):
+    return GradientReverseFunction.apply(x, lambda_)
+
+
+class DomainDiscriminator(nn.Module):
+    def __init__(self, input_dim=64, hidden_dim=128):
+        super().__init__()
+        self.classifier = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 2)  # 二分类：源域/目标域
+        )
+        self.tanh = nn.Tanh()
+
+    def forward(self, x):
+        logits = self.classifier(x)
+        return self.tanh(logits) * 5

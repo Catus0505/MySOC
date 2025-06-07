@@ -7,13 +7,11 @@ from tqdm import tqdm
 
 from Modules import SOCPredictor
 from preprocess import get_dataloader
+from configs import EvaluateConfig
+EvalCfg = EvaluateConfig()
 
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 中文字体（黑体）
 plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示问题
-
-
-def moving_average(x, w=5):
-    return np.convolve(x, np.ones(w)/w, mode='valid')
 
 
 def compute_rmse(y_pred, y_true):
@@ -34,10 +32,10 @@ def evaluate_model():
     total_loss = 0
     all_preds, all_labels = [], []
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = EvalCfg.device
 
     # 加载最佳模型
-    checkpoint = torch.load('transfer_model.pth', weights_only=False)
+    checkpoint = torch.load(EvalCfg.checkpoint, weights_only=False)
     scalers = checkpoint['scalers']
 
     # 重新初始化模型
@@ -57,7 +55,7 @@ def evaluate_model():
     model.eval()
 
     # 加载验证数据
-    val_loader = get_dataloader('10degC/10degC_LA92.csv', flag='test', scalers=scalers)
+    val_loader = get_dataloader(EvalCfg.dataset, flag='test', scalers=scalers)
 
     predictions = []
     true_values = []
@@ -86,7 +84,6 @@ def evaluate_model():
     all_labels = torch.cat(all_labels)
 
     preds = all_preds.squeeze(1).cpu().numpy()
-    # preds = moving_average(preds, w=50)
     labels = all_labels.squeeze(1).cpu().numpy()
 
     # 绘图

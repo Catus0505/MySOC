@@ -9,6 +9,8 @@ import os
 
 from preprocess import get_dataloader
 from Modules import *
+from configs import PretrainConfig
+PretrainCfg = PretrainConfig()
 
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 中文字体（黑体）
 plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示问题
@@ -54,12 +56,12 @@ def visualize_periodic_features(src_periodic, sample_idx=0, channel_idx=0):
 
 def pretrain():
     # 设备设置
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = PretrainCfg.device
     print(f"使用设备: {device}")
 
     # 1. 数据加载
     print("加载数据...")
-    train_loader, _, scalers = get_dataloader('10degC/10degC_US06.csv', flag='train')
+    train_loader, _, scalers = get_dataloader(PretrainCfg.dataset, flag='train')
 
     # 获取数据维度信息
     sample_times, sample_features, sample_labels = next(iter(train_loader))
@@ -98,7 +100,7 @@ def pretrain():
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
     # 训练参数
-    num_epochs = 100
+    num_epochs = PretrainCfg.num_epochs
     best_val_loss = float('inf')
     patience = 10
     patience_counter = 0
@@ -188,16 +190,16 @@ def pretrain():
     print("训练完成!")
     print(f"最佳验证损失: {best_val_loss:.6f}")
 
-    # 绘制损失曲线
-    plt.figure(figsize=(10, 6))
-    plt.plot(train_losses, label='训练损失')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('SOC预测模型训练过程')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig('training_curves.png')
-    plt.show()
+    # # 绘制损失曲线
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(train_losses, label='训练损失')
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Loss')
+    # plt.title('SOC预测模型训练过程')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.savefig('training_curves.png')
+    # plt.show()
 
     return model, scalers
 

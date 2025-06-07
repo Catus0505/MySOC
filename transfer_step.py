@@ -8,7 +8,9 @@ from itertools import cycle
 from preprocess import get_dataloader
 from Modules import *
 from mmd import *
-from pca import dis
+from configs import TransferConfig
+TransCfg = TransferConfig()
+
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 中文字体（黑体）
 plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示问题
 
@@ -54,65 +56,17 @@ def visualize_periodic_features(src_periodic, tgt_periodic, sample_idx=0, channe
     plt.show()
 
 
-def compute_adversarial_loss(domain_discriminator, src_feats, tgt_feats, device):
-    batch_size = src_feats.size(0)
-
-    feats = torch.cat([src_feats, tgt_feats], dim=0)
-    domain_labels = torch.cat([
-        torch.ones(batch_size, dtype=torch.long),
-        torch.zeros(batch_size, dtype=torch.long)
-    ]).to(device)
-
-    domain_preds = domain_discriminator(feats)  # (batch_size*2, 2)
-    probs = F.softmax(domain_preds, dim=1)  # shape: (2*batch_size, 2)
-
-    # print("源域样本判为源域的概率（应接近1）：", probs[:batch_size, 1].mean().item())
-    # print("目标域样本判为目标域的概率（应接近1）：", probs[batch_size:, 0].mean().item())
-    gp = compute_gradient_penalty(domain_discriminator, src_feats.detach(), tgt_feats.detach(), device)
-    lambda_gp = 10.0  # 梯度惩罚权重
-
-    criterion = nn.CrossEntropyLoss()
-    adv_loss = criterion(domain_preds, domain_labels)
-    return adv_loss + lambda_gp * gp
-
-
-def compute_gradient_penalty(D, real_samples, fake_samples, device):
-    """计算WGAN-GP梯度惩罚"""
-    alpha = torch.rand(real_samples.size(0), *[1] * (real_samples.dim() - 1)).to(device)
-    alpha = alpha.expand_as(real_samples)
-
-    interpolates = alpha * real_samples + (1 - alpha) * fake_samples
-    interpolates.requires_grad_(True)
-
-    d_interpolates = D(interpolates)
-
-    fake = torch.ones(d_interpolates.size()).to(device)
-    gradients = torch.autograd.grad(
-        outputs=d_interpolates,
-        inputs=interpolates,
-        grad_outputs=fake,
-        create_graph=True,
-        retain_graph=True,
-        only_inputs=True,
-    )[0]
-
-    gradients = gradients.view(gradients.size(0), -1)
-    gradient_norm = gradients.norm(2, dim=1)
-    gradient_penalty = ((gradient_norm - 1) ** 2).mean()
-    return gradient_penalty
-
-
 def transfer():
     # 设备设置
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = TransCfg.device
     print(f"使用设备: {device}")
 
     # 1. 数据加载
     print("加载数据...")
-    checkpoint = torch.load('pretrain_model.pth', weights_only=False)
+    checkpoint = torch.load(TransCfg.checkpoint, weights_only=False)
     scalers = checkpoint['scalers']
-    src_loader, _, _ = get_dataloader('10degC/10degC_US06.csv', flag='transfer', scalers=scalers)
-    tgt_loader, _, _ = get_dataloader('10degC/10degC_LA92.csv', flag='transfer', scalers=scalers)
+    src_loader, _, _ = get_dataloader(TransCfg.source, flag='transfer', scalers=scalers)
+    tgt_loader, _, _ = get_dataloader(TransCfg.target, flag='transfer', scalers=scalers)
 
     # 获取数据维度信息
     src_times, src_features, src_labels = next(iter(src_loader))
@@ -178,7 +132,7 @@ def transfer():
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
     # 训练参数
-    num_epochs = 100
+    num_epochs = TransCfg.num_epochs
     best_train_loss = float('inf')
     patience = 10
     patience_counter = 0
@@ -222,7 +176,11 @@ def transfer():
                 loss = mmd_loss
 
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(tgt_model.parameters(), max_norm=1.0)
+                # for name, param in tgt_model.named_parameters():
+                #     if param.grad is not None:
+                #         print(f"{name} grad norm:", param.grad.norm().item())
+                grad_norm = torch.nn.utils.clip_grad_norm_(tgt_model.parameters(), max_norm=10.0)
+                # print("Gradient norm:", grad_norm.item())
                 optimizer.step()
 
                 # 累积loss和批次数
