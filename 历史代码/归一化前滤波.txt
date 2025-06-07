@@ -1,0 +1,154 @@
+import os
+
+import numpy as np
+import pandas as pd
+import torch
+import torch.utils.data as data
+from sklearn.preprocessing import MinMaxScaler
+from scipy.signal import savgol_filter
+import matplotlib.pyplot as plt
+
+from configs import PreprocessConfig
+PreprocCfg = PreprocessConfig()
+
+
+def plot_voltage_current_raw_vs_filtered(df):
+    # 归一化前作图
+    plt.figure(figsize=(14, 6))
+
+    # 电压对比
+    plt.subplot(2, 1, 1)
+    plt.plot(df.iloc[:, 1], label='Raw Voltage', alpha=0.7)
+    plt.plot(df['voltage_smooth'].iloc[:], label='Smoothed Voltage', linewidth=2)
+    plt.title('Voltage: Raw vs Smoothed')
+    plt.legend()
+    plt.grid(True)
+
+    # 电流对比
+    plt.subplot(2, 1, 2)
+    plt.plot(df.iloc[:, 2], label='Raw Current', alpha=0.7)
+    plt.plot(df['current_smooth'].iloc[:], label='Smoothed Current', linewidth=2)
+    plt.title('Current: Raw vs Smoothed')
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_voltage_current_raw_vs_filtered_after_normalize(data):
+    # 归一化后作图
+    time = data[:, 0]
+    orig_current = data[:, 1]
+    orig_voltage = data[:, 2]
+    smooth_current = data[:, 3]
+    smooth_voltage = data[:, 4]
+
+    plt.figure(figsize=(14, 6))
+
+    # 电流对比
+    plt.subplot(1, 2, 1)
+    plt.plot(time, orig_current, label='Original Current', alpha=0.5)
+    plt.plot(time, smooth_current, label='Smoothed Current', linewidth=2)
+    plt.title('Current: Original vs Smoothed')
+    plt.xlabel('Time')
+    plt.ylabel('Current')
+    plt.legend()
+    plt.grid(True)
+
+    # 电压对比
+    plt.subplot(1, 2, 2)
+    plt.plot(time, orig_voltage, label='Original Voltage', alpha=0.5)
+    plt.plot(time, smooth_voltage, label='Smoothed Voltage', linewidth=2)
+    plt.title('Voltage: Original vs Smoothed')
+    plt.xlabel('Time')
+    plt.ylabel('Voltage')
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def create_dataloader(data_arrays, batch_size, shuffle=True):
+    # 构造一个 Pytorch 数据加载器
+    dataset = data.TensorDataset(*data_arrays)
+    return data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+
+def slide_window_cut(scaled_data, time_step=PreprocCfg.time_step,
+                     stride=PreprocCfg.stride):
+    # 样本数量、每个样本的时间步数、每个时间步的特征数量
+    # 对时间序列进行滑动窗口切分
+    times_list = []
+    feats_list = []
+    labels_list = []
+
+    # 滑动窗口采样
+    for i in range(0, len(scaled_data) - time_step + 1, stride):
+        time = scaled_data[i:i + time_step, 0:1]
+        feature = scaled_data[i:i + time_step, 1:6]  # 取1-5列作为特征
+        label = scaled_data[i + time_step - 1, -1]  # 取最后一个时间步作为标签
+
+        times_list.append(time)
+        feats_list.append(feature)
+        labels_list.append(label)
+
+    # 转换为 numpy 数组
+    times = np.stack(times_list)
+    feats = np.stack(feats_list)
+    labels = np.stack(labels_list).reshape(-1, 1)
+    return times, feats, labels
+
+
+def apply_filter(df):
+    # 添加滤波列
+    window_length = 201
+    polyorder = 2
+    df['voltage_smooth'] = savgol_filter(df.iloc[:, 1], window_length, polyorder)
+    df['current_smooth'] = savgol_filter(df.iloc[:, 2], window_length, polyorder)
+    return df
+
+
+def normalize_columns(df):
+    # 归一化选定列
+    scaler_time = MinMaxScaler()
+    scaler_voltage = MinMaxScaler()
+    scaler_current = MinMaxScaler()
+    scaler_voltage_smooth = MinMaxScaler()
+    scaler_current_smooth = MinMaxScaler()
+    scaler_temp = MinMaxScaler()
+
+    df.iloc[:, 0] = scaler_time.fit_transform(df.iloc[:, 0].values.reshape(-1, 1)).flatten()
+    df.iloc[:, 1] = scaler_voltage.fit_transform(df.iloc[:, 1].values.reshape(-1, 1)).flatten()
+    df.iloc[:, 2] = scaler_current.fit_transform(df.iloc[:, 2].values.reshape(-1, 1)).flatten()
+    df['voltage_smooth'] = scaler_voltage_smooth.fit_transform(df['voltage_smooth'].values.reshape(-1, 1)).flatten()
+    df['current_smooth'] = scaler_current_smooth.fit_transform(df['current_smooth'].values.reshape(-1, 1)).flatten()
+    df.iloc[:, 3] = scaler_temp.fit_transform(df.iloc[:, 3].values.reshape(-1, 1)).flatten()
+    return df
+
+
+def get_dataloader(dataset, flag):
+    batch_size = PreprocCfg.batch_size
+    data_path = os.path.join('dataset/', dataset)
+
+    df = pd.read_csv(data_path)
+    df = apply_filter(df)
+    df = normalize_columns(df)
+
+    df = df[[df.columns[0], df.columns[2], df.columns[1], 'current_smooth', 'voltage_smooth', df.columns[3], df.columns[4]]].values
+    plot_voltage_current_raw_vs_filtered_after_normalize(df)
+
+    times, feats, labels = slide_window_cut(df)
+
+    data_len = len(feats)
+
+    times = torch.tensor(times).float()
+    feats = torch.tensor(feats).float()
+    labels = torch.tensor(labels).float()
+
+    if flag == 'train':
+        dataloader = create_dataloader((times, feats, labels), batch_size)
+    else:
+        dataloader = create_dataloader((times, feats, labels), data_len, shuffle=False)
+    return dataloader
