@@ -66,5 +66,4 @@ def compute_mmd(source, target, gammas=None, pool_fn=temporal_mean_std_pool, nor
     loss = (K_ss.sum() - torch.diag(K_ss).sum()) / (m * (m - 1)) \
          + (K_tt.sum() - torch.diag(K_tt).sum()) / (n * (n - 1)) \
          - 2 * K_st.mean()
-
     return loss

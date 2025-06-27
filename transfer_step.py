@@ -71,7 +71,7 @@ def transfer():
     # 获取数据维度信息
     src_times, src_features, src_labels = next(iter(src_loader))
     src_seq_len = src_features.shape[1]  # 时间序列长度
-    src_feature_dim = src_features.shape[2]  # 特征维度 (应该是5)
+    src_feature_dim = src_features.shape[2]  # 特征维度
 
     print(f"数据信息:")
     print(f"  批次大小: {src_features.shape[0]}")
@@ -82,7 +82,7 @@ def transfer():
 
     tgt_times, tgt_features, tgt_labels = next(iter(tgt_loader))
     tgt_seq_len = tgt_features.shape[1]  # 时间序列长度
-    tgt_feature_dim = tgt_features.shape[2]  # 特征维度 (应该是5)
+    tgt_feature_dim = tgt_features.shape[2]  # 特征维度
 
     print(f"数据信息:")
     print(f"  批次大小: {tgt_features.shape[0]}")
@@ -121,8 +121,8 @@ def transfer():
     tgt_model.load_state_dict(checkpoint['model_state_dict'])
 
     # 冻结 src_model
-    for param in src_model.parameters():
-        param.requires_grad = False
+    # for param in src_model.parameters():
+    #     param.requires_grad = False
     # 冻结 tgt_model 的 trend_component
     # for param in tgt_model.encoder.trend_proj.parameters():
     #     param.requires_grad = False
@@ -165,8 +165,11 @@ def transfer():
                 tgt_features, tgt_times = tgt_features.to(device), tgt_times.to(device)
 
                 ###### 1. 提取源/目标域特征 ######
-                with torch.no_grad():
-                    src_feats, src_decomposed = src_model.encoder(src_features, src_times)
+                # with torch.no_grad():
+                #     src_feats, src_decomposed = src_model.encoder(src_features, src_times)
+                src_feats, src_decomposed = src_model.encoder(src_features, src_times)
+                for param in src_model.encoder.parameters():
+                    param.requires_grad = False
                 with torch.enable_grad():
                     tgt_feats, tgt_decomposed = tgt_model.encoder(tgt_features, tgt_times)
 

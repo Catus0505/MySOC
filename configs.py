@@ -12,7 +12,7 @@ class PretrainConfig(object):
     def __init__(self):
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.dataset = '0degC/0degC_US06.csv'
+        self.dataset = '10degC/10degC_US06.csv'
         self.num_epochs = 100
 
 
@@ -20,8 +20,8 @@ class TransferConfig(object):
     def __init__(self):
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.source = '0degC/0degC_US06.csv'
-        self.target = '0degC/0degC_UDDS.csv'
+        self.source = '10degC/10degC_US06.csv'
+        self.target = '10degC/10degC_LA92.csv'
         self.checkpoint = 'pretrain_model.pth'
         self.num_epochs = 100
 
@@ -30,5 +30,5 @@ class EvaluateConfig(object):
     def __init__(self):
 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.dataset = '0degC/0degC_UDDS.csv'
-        self.checkpoint = 'transfer_model.pth'
+        self.dataset = '10degC/10degC_US06.csv'
+        self.checkpoint = 'pretrain_model.pth'

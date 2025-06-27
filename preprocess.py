@@ -96,8 +96,8 @@ def apply_filter(df):
     # 对归一化后的电压、电流进行Savitzky-Golay滤波
     window_length = 301
     polyorder = 2
-    df['voltage_smooth'] = savgol_filter(df.iloc[:, 1], window_length, polyorder)
-    df['current_smooth'] = savgol_filter(df.iloc[:, 2], window_length, polyorder)
+    df['current_smooth'] = savgol_filter(df.iloc[:, 1], window_length, polyorder)
+    df['voltage_smooth'] = savgol_filter(df.iloc[:, 2], window_length, polyorder)
     return df
 
 
@@ -185,7 +185,6 @@ def get_dataloader(dataset, flag, scalers=None, validation_split=0, seed=42):
         train_dataloader = create_dataloader((train_times, train_feats, train_labels), batch_size, shuffle=True, seed=seed)
         val_dataloader = create_dataloader((val_times, val_feats, val_labels), batch_size, shuffle=False)
         return train_dataloader, val_dataloader, scalers
-
 
     else:
         dataloader = create_dataloader((times, feats, labels), len(feats), shuffle=False)
